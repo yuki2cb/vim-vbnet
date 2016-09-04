@@ -20,8 +20,8 @@ function! s:VbSearch(pattern, flags)
     endwhile
 endfun
 
-nnoremap <buffer> <silent> [[ :<C-u>call <SID>VbSearch('^\s*\<\(private\<Bar>public\<Bar>friend\<Bar>protected\)\>\s\+\(function\<Bar>sub\)', 'bW')<cr>
-nnoremap <buffer> <silent> ]] :<C-u>call <SID>VbSearch('^\s*\<\(private\<Bar>public\<Bar>friend\<Bar>protected\)\>\s\+\(function\<Bar>sub\)', 'W')<cr>
+nnoremap <buffer> <silent> [[ :<C-u>call <SID>VbSearch('^[^'']*\%(\<end\> \)\@<!\(function\<Bar>sub\)', 'bW')<cr>
+nnoremap <buffer> <silent> ]] :<C-u>call <SID>VbSearch('^[^'']*\%(\<end\> \)\@<!\(function\<Bar>sub\)', 'W')<cr>
 nnoremap <buffer> <silent> [] :call <SID>VbSearch('^\s*\<end\>\s\+\(function\\|sub\)', 'bW')<cr>
 nnoremap <buffer> <silent> ][ :call <SID>VbSearch('^\s*\<end\>\s\+\(function\\|sub\)', 'W')<cr>
 
