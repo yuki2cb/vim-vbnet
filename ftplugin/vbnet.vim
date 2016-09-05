@@ -20,15 +20,15 @@ function! s:VbSearch(pattern, flags)
     endwhile
 endfun
 
-nnoremap <buffer> <silent> [[ :<C-u>call <SID>VbSearch('^[^'']*\%(\<end\> \)\@<!\(function\<Bar>sub\)', 'bW')<cr>
-nnoremap <buffer> <silent> ]] :<C-u>call <SID>VbSearch('^[^'']*\%(\<end\> \)\@<!\(function\<Bar>sub\)', 'W')<cr>
+nnoremap <buffer> <silent> [[ :<C-u>call <SID>VbSearch('^[^'']*\%(\<\(end\<Bar>exit\)\> \)\@<!\<\(function\<Bar>sub\)\>', 'bW')<cr>
+nnoremap <buffer> <silent> ]] :<C-u>call <SID>VbSearch('^[^'']*\%(\<\(end\<Bar>exit\)\> \)\@<!\<\(function\<Bar>sub\)\>', 'W')<cr>
 nnoremap <buffer> <silent> [] :call <SID>VbSearch('^\s*\<end\>\s\+\(function\\|sub\)', 'bW')<cr>
 nnoremap <buffer> <silent> ][ :call <SID>VbSearch('^\s*\<end\>\s\+\(function\\|sub\)', 'W')<cr>
 
 if exists("loaded_matchit")
     let b:match_ignorecase = 1
     let headsp = '\%(^\s*\)\@<='
-    let no_end = '\%(\<End\> \)\@<!'
+    let no_end = '\%(\<\(End\|Exit\)\> \)\@<!'
     let b:match_words =
           \   headsp.'\<Namespace\>:'.headsp.'\<End Namespace\>,'
           \ . no_end.'\<Module\>:'.headsp.'\<End Module\>,'
