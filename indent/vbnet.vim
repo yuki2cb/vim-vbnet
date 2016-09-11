@@ -9,13 +9,14 @@ endif
 let b:did_indent = 1
 
 setlocal autoindent
+setlocal nosmartindent
 setlocal expandtab
 setlocal tabstop<
 setlocal softtabstop=4
 setlocal shiftwidth=4
 
 setlocal indentexpr=VbNetGetIndent(v:lnum)
-setlocal indentkeys=!^F,o,O,0=~?catch,0=~?else,0=~?elseif,0=~?end,0=~?next,0=~?end,<:>
+setlocal indentkeys=!^F,o,O,0#,0=~catch,0=~finally,0=~else,0=~elseif,0=~end,0=~wend,0=~next,=~select,0=~case,0=~loop,<:>
 
 " Only define the function once.
 if exists("*VbNetGetIndent")
@@ -24,58 +25,118 @@ endif
 let s:keepcpo= &cpo
 set cpo&vim
 
-function VbNetGetIndent(lnum)
-  let plnum = prevnonblank(v:lnum - 1)
-  let ind = indent(plnum)
+let s:LABELS_OR_PREPROC = '^\s*\(\<\k\+\>:\s*$\|#.*\)'
+let s:LINE_CONTINUATION = '\(\s_\|,\|(\|{\|&\|=\|+\|-\|\*\|/\|\<mod\>\|<\|>\|\^\|\<and\>\|\<andalso\>\|\<or\>\|\<orelse\>\|\<like\>\|\<xor\>\|\<is\>\|\<isnot\>\|\.\|\<in\>\|\<from\>\)$'
+let s:LINE_CONTINUATION_AFTER = '^\s*\(}\|)\)'
 
-  let access_modifier = '\<\(Public\|Protected\|Private\|Friend\)\>'
-
-  let previous_line = getline(a:lnum - 1)
-  if previous_line =~ '\s_$' || previous_line =~ ',$' || previous_line =~ '^\s*\.'
-    return ind
-  elseif previous_line =~ '{$' || previous_line =~ '($' || previous_line =~ '=$'
-    return ind + &l:shiftwidth
-  elseif previous_line =~? '^'.access_modifier || previous_line =~? '^Namespace'
-    return ind + &l:shiftwidth
-  elseif previous_line =~? '^\s*'.access_modifier.'\s\(\Class\|Module\|Enum\|Interface\|Operator\)'
-    return ind + &l:shiftwidth
-  elseif previous_line =~? '\<\(Overrides\|Overridable\|Overloads\|NotOverridable\|MustOverride\|Shadows\|Shared\|ReadOnly\|WriteOnly\)\>'
-    return ind + &l:shiftwidth
-  endif
-
-  if previous_line =~? 'Then$'
-    return ind + &l:shiftwidth
-  elseif previous_line =~? '^\s*\<\(Select Case\|Else\|ElseIf\|For\|While\|Using\|Try\|Catch\|Finally\)\>'
-    return ind + &l:shiftwidth
-  elseif previous_line =~? '^\s\+}$'
-    return &l:shiftwidth + &l:shiftwidth
-  endif
-
-  if previous_line =~? 'End \(If\|Case\|Try\|Sub\|Function\|Class\|Operator\)$'
-    return ind
-
-  endif
+function! VbNetGetIndent(lnum)
+  let ACCESS_MODIFIER = '\<\%(Public\|Protected\|Private\|Friend\)\>'
 
   " labels and preprocessor get zero indent immediately
   let this_line = getline(a:lnum)
-  let LABELS_OR_PREPROC = '^\s*\(\<\k\+\>:\s*$\|#.*\)'
-  if this_line =~? LABELS_OR_PREPROC
+  if this_line =~? s:LABELS_OR_PREPROC
     return 0
   endif
 
   " Find a non-blank line above the current line.
   " Skip over labels and preprocessor directives.
-  let lnum = a:lnum
-  while lnum > 0
-    let lnum = prevnonblank(lnum - 1)
-    let previous_line = getline(lnum)
-    if previous_line !~? LABELS_OR_PREPROC
-      let pp_line = getline(lnum - 1)
-      break
-    endif
-  endwhile
+  let prev_lnum = s:my_prevnonblank(a:lnum - 1)
+  let previous_line = getline(prev_lnum)
 
-return ind
+  " Hit the start of the file, use zero indent.
+  if prev_lnum == 0
+    return 0
+  endif
+
+  " when previous-line is a part of statements split by the line-continuation character,
+  " get a start line of the previous statement.
+  let prev_statement_start_lnum = s:getPrevStatementLinenr(prev_lnum)
+  let previous_statement = getline(prev_statement_start_lnum)
+  let ind = indent(prev_statement_start_lnum)
+
+  "echomsg "previous:".prev_lnum.",prev_statement:".prev_statement_start_lnum.",base_indent:".ind
+
+  " this block is for the statement split by the line-continuation character.
+  if (col('.') - 1) == matchend(getline('.'), '^\s*')
+    " Indent by a new line
+    if previous_line =~? '\s_$'
+      return -1
+    elseif previous_line =~? s:LINE_CONTINUATION
+      if prev_lnum == prev_statement_start_lnum
+        return ind + &l:shiftwidth
+      else
+        return -1
+      endif
+    endif
+  else
+    if previous_line =~? s:LINE_CONTINUATION || this_line =~? s:LINE_CONTINUATION_AFTER
+      return -1
+    endif
+  endif
+
+  " Add indent
+  if previous_statement =~? '^\s*\('.ACCESS_MODIFIER.'\s\+\)\?\<\%(Namespace\|Class\|Module\|Enum\|Interface\|Operator\)\>'
+    let ind += &l:shiftwidth
+  elseif previous_statement =~? '\(\<End\>\s*\)\@<!\<\%(Function\|Sub\|Property\)\>'
+    let ind += &l:shiftwidth
+  elseif previous_statement =~? '\<\(Overrides\|Overridable\|Overloads\|NotOverridable\|MustOverride\|Shadows\|Shared\|ReadOnly\|WriteOnly\)\>'
+    let ind += &l:shiftwidth
+  elseif previous_line =~? '\<Then\>'
+    let ind += &l:shiftwidth
+  elseif previous_statement =~? '^\s*\<\(Select Case\|Case\|Else\|ElseIf\|For\|While\|With\|Using\|Try\|Catch\|Finally\)\>'
+    let ind += &l:shiftwidth
+  endif
+
+  " Subtract indent
+  if this_line =~? '^\s*\<End\>\s\+\<Select\>'
+    if previous_statement !~? '^\s*\<Select\>'
+      let ind -= &l:shiftwidth * 2
+    else
+      " this case is for an empty 'select' -- 'end select'
+      let ind -= &l:shiftwidth
+    endif
+  elseif this_line =~? '^\s*\<\(Case\|Default\)\>'
+    if previous_statement !~? '^\s*\<Select\>'
+      let ind -= &l:shiftwidth
+    endif
+  elseif this_line =~? '^\s*\<\(End\|Else\|ElseIf\|Until\|Loop\|Next\|Wend\|Catch\|Finally\)\>'
+    let ind -= &l:shiftwidth
+  endif
+
+  return ind
+endfunction
+
+" Find a non-blank line above the current line.
+" Skip over labels and preprocessor directives.
+function! s:my_prevnonblank(lnum)
+  let linenum = prevnonblank(a:lnum)
+  while getline(linenum) =~? s:LABELS_OR_PREPROC
+    let linenum = prevnonblank(linenum - 1)
+  endwhile
+  return linenum < 0 ? 0 : linenum
+endfunction
+
+" get a start line of the previous statement.
+" e.g.  Dim foo() As String = {       ' <- return a number of this line
+"                               "foo",
+"                               "bar"
+"                             }
+function! s:getPrevStatementLinenr(lnum)
+  let linenum = s:my_prevnonblank(a:lnum)
+  let prev_statement_line = linenum
+  while linenum > 0 && getline(linenum) =~? s:LINE_CONTINUATION_AFTER
+    let prev_statement_line = linenum
+    let linenum = s:my_prevnonblank(linenum - 1)
+  endwhile
+  if linenum > 0 && getline(linenum) !~? s:LINE_CONTINUATION
+    let prev_statement_line = linenum
+    let linenum = s:my_prevnonblank(linenum - 1)
+  endif
+  while linenum > 0 && getline(linenum) =~? s:LINE_CONTINUATION
+    let prev_statement_line = linenum
+    let linenum = s:my_prevnonblank(linenum - 1)
+  endwhile
+  return prev_statement_line
 endfunction
 
 let &cpo = s:keepcpo
