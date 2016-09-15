@@ -33,7 +33,7 @@ function! VbNetGetIndent(lnum)
   let ACCESS_MODIFIER = '\<\%(Public\|Protected\|Private\|Friend\)\>'
 
   " labels and preprocessor get zero indent immediately
-  let this_line = getline(a:lnum)
+  let this_line = s:getline(a:lnum)
   if this_line =~? s:LABELS_OR_PREPROC
     return 0
   endif
@@ -41,7 +41,7 @@ function! VbNetGetIndent(lnum)
   " Find a non-blank line above the current line.
   " Skip over labels and preprocessor directives.
   let prev_lnum = s:my_prevnonblank(a:lnum - 1)
-  let previous_line = getline(prev_lnum)
+  let previous_line = s:getline(prev_lnum)
 
   " Hit the start of the file, use zero indent.
   if prev_lnum == 0
@@ -51,13 +51,13 @@ function! VbNetGetIndent(lnum)
   " when previous-line is a part of statements split by the line-continuation character,
   " get a start line of the previous statement.
   let prev_statement_start_lnum = s:getPrevStatementLinenr(prev_lnum)
-  let previous_statement = getline(prev_statement_start_lnum)
+  let previous_statement = s:getline(prev_statement_start_lnum)
   let ind = indent(prev_statement_start_lnum)
 
   "echomsg "previous:".prev_lnum.",prev_statement:".prev_statement_start_lnum.",base_indent:".ind
 
   " this block is for the statement split by the line-continuation character.
-  if (col('.') - 1) == matchend(getline('.'), '^\s*')
+  if (col('.') - 1) == matchend(this_line, '^\s*')
     " Indent by a new line
     if previous_line =~? '\s_$'
       return -1
@@ -106,11 +106,17 @@ function! VbNetGetIndent(lnum)
   return ind
 endfunction
 
+" Get a string of line {lnum} without comment
+function! s:getline(lnum)
+  let line = getline(a:lnum)
+  return substitute(line, '\s*''.*$', '', '')
+endfunction
+
 " Find a non-blank line above the current line.
-" Skip over labels and preprocessor directives.
+" Skip over labels, preprocessor directives and comment line.
 function! s:my_prevnonblank(lnum)
   let linenum = prevnonblank(a:lnum)
-  while getline(linenum) =~? s:LABELS_OR_PREPROC
+  while getline(linenum) =~? s:LABELS_OR_PREPROC || getline(linenum) =~? '^\s*'''
     let linenum = prevnonblank(linenum - 1)
   endwhile
   return linenum < 0 ? 0 : linenum
